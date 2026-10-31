@@ -1,0 +1,756 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Sandbox API access · Interactive walkthrough</title>
+    <style>
+      :root {
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #e9edf7;
+        background: #0b1020;
+        font-synthesis: none;
+      }
+      * { box-sizing: border-box; }
+      [hidden] { display: none !important; }
+      body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 85% 0%, #1b254c 0, transparent 34%), #0b1020; }
+      button, select { font: inherit; cursor: pointer; }
+      button:focus-visible, select:focus-visible, summary:focus-visible, a:focus-visible { outline: 3px solid #a8d4ff; outline-offset: 3px; }
+      .page { max-width: 1540px; margin: 0 auto; padding: 38px 28px 70px; }
+      .eyebrow { color: #9bb9ff; font-size: 12px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+      h1 { margin: 10px 0 9px; font-size: clamp(32px, 4vw, 50px); letter-spacing: -.045em; line-height: 1.07; }
+      .intro { max-width: 760px; color: #b4bfd8; font-size: 16px; line-height: 1.55; margin: 0; }
+      .topline { display: flex; justify-content: space-between; align-items: end; gap: 20px; flex-wrap: wrap; }
+      .mode-row { margin: 30px 0 20px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+      .mode { border: 1px solid #344265; border-radius: 11px; padding: 11px 17px; color: #d4dcf1; background: #151e36; font-weight: 750; }
+      .mode[aria-pressed="true"] { background: #dce8ff; border-color: #dce8ff; color: #0b1630; }
+      .mode-note { margin-left: auto; color: #93a5c9; font-size: 13px; }
+      .policy-panel { border: 1px solid #344265; border-radius: 12px; padding: 15px 18px; background: #111b30; margin-bottom: 18px; }
+      .scenario-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+      .scenario-row label { color: #aebcdb; font-size: 13px; font-weight: 700; }
+      .scenario-row select { max-width: 100%; background: #1b2945; color: #edf2ff; border: 1px solid #52658b; border-radius: 8px; padding: 8px 11px; }
+      .ttl-pill { color: #b5f5e1; font-size: 13px; margin-left: auto; }
+      #policy-summary { font-size: 14px; color: #c0cbe1; line-height: 1.5; margin: 12px 0 0; }
+      .expiry-details { font-size: 13px; color: #aebcdb; line-height: 1.5; margin-top: 12px; }
+      .expiry-details summary { cursor: pointer; color: #c9b7ff; }
+      .expiry-details ul { padding-left: 20px; margin-bottom: 0; }
+      .expiry-details li { margin: 7px 0; }
+      .view-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 22px 0 12px; }
+      .view-note { color: #aebcdb; font-size: 13px; margin: 0; flex-basis: 100%; line-height: 1.5; }
+      .policy-state { color: #c9b7ff; font-size: 13px; margin: 10px 0 0; }
+      .node .actor-meta text { fill: #93a6c7; font-size: 11px; font-weight: 450; text-anchor: middle; }
+      .node .actor-meta text.changed { fill: #9de3c9; font-weight: 600; }
+      .snapshot-note { color: #9cb5dc; font-size: 12px; line-height: 1.5; }
+      .stage { display: grid; grid-template-columns: minmax(0, 2.15fr) minmax(310px, .85fr); gap: 16px; }
+      .diagram-wrap, .detail { border: 1px solid #2b3856; background: #10182d; border-radius: 20px; box-shadow: 0 18px 50px #03060f3d; }
+      .diagram-wrap { overflow: hidden; min-width: 0; }
+      .diagram-top { padding: 17px 21px 0; display: flex; gap: 12px; justify-content: space-between; align-items: center; color: #aebcdb; font-size: 13px; }
+      .diagram-top strong { color: #e2e9fb; font-size: 14px; }
+      .diagram { width: 100%; display: block; aspect-ratio: 1000 / 790; min-height: 410px; }
+      .node > rect { fill: #18233d; stroke: #3d4c70; stroke-width: 2; rx: 18; transition: fill .25s, stroke .25s, filter .25s; }
+      .node.active > rect { fill: #1e315a; stroke: #95b8ff; filter: drop-shadow(0 0 14px #628aff55); }
+      .node.terminal rect { fill: #18332f; stroke: #4ba99a; }
+      .node text { fill: #eaf0ff; font-size: 19px; font-weight: 750; }
+      .node .sub { fill: #9aaccd; font-size: 13px; font-weight: 500; }
+      .node .index { fill: #8aa9eb; font-size: 12px; letter-spacing: .13em; font-weight: 850; }
+      .guide { stroke: #263651; stroke-width: 2; fill: none; stroke-dasharray: 5 10; }
+      #route { stroke: #b5a3ff; stroke-width: 3; fill: none; stroke-linecap: round; opacity: .8; }
+      .credential-card { filter: drop-shadow(0 6px 9px #0008); pointer-events: none; }
+      .credential-card rect { stroke-width: 1.5; }
+      .credential-card text { font-size: 16px; font-weight: 750; text-anchor: middle; }
+      .credential-card .card-caption { font-size: 11px; font-weight: 650; letter-spacing: .08em; }
+      .stored text { font-size: 13px; text-anchor: middle; font-weight: 600; }
+      .stored rect { stroke-width: 1; rx: 8; }
+      .boundary { fill: #111c30; stroke: #293b59; stroke-dasharray: 6 8; rx: 20; }
+      .boundary-label { fill: #92a7cb; font-size: 11px; font-weight: 750; letter-spacing: .1em; }
+      .legend { display: flex; flex-wrap: wrap; gap: 12px; padding: 0 22px 14px; font-size: 12px; color: #b8c6dd; }
+      .legend span { display: inline-flex; align-items: center; gap: 6px; }
+      .legend i { width: 8px; height: 8px; border-radius: 50%; background: var(--swatch); }
+      .diagram-caption { line-height: 1.5; }
+      .diagram-top { min-height: 48px; padding-bottom: 8px; flex-wrap: wrap; }
+      .diagram-top span { font-size: 12px; }
+      .controls { margin-top: 0; }
+      .exchange-progress { display: flex; gap: 6px; margin-top: 16px; }
+      .exchange-progress span { height: 4px; flex: 1; background: #293b59; border-radius: 3px; }
+      .exchange-progress .current { background: #baa7ff; }
+      .exchange-progress .complete { background: #637da9; }
+      .boundary-note { padding: 12px 14px; border-left: 2px solid #b69dff; background: #1b233a; border-radius: 0 8px 8px 0; font-size: 13px; line-height: 1.5; color: #c6d1e8; }
+      .diagram-caption { min-height: 46px; padding: 0 22px 18px; color: #9db0d0; font-size: 13px; }
+      .mobile-hint { display: none; }
+      .detail { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+      .step-kicker { color: #86aaff; font-size: 12px; font-weight: 850; letter-spacing: .13em; text-transform: uppercase; }
+      .detail h2 { margin: 8px 0 9px; font-size: clamp(23px, 2.2vw, 31px); line-height: 1.15; letter-spacing: -.025em; }
+      .detail p { color: #c0cbe1; line-height: 1.55; font-size: 15px; margin: 0; }
+      .payload { display: flex; gap: 9px; align-items: start; padding: 13px 14px; border-radius: 12px; background: #1b2945; border: 1px solid #33486e; }
+      .payload-label { color: #91aded; font-size: 11px; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; flex: 0 0 66px; padding-top: 3px; }
+      .payload strong { font-size: 14px; font-weight: 650; line-height: 1.4; }
+      .custody { margin-top: auto; border-top: 1px solid #2d3a55; padding-top: 18px; }
+      .custody h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: #93a5c9; margin: 0 0 12px; }
+      .custody dl { margin: 0; display: grid; gap: 10px; }
+      .custody .row { display: grid; grid-template-columns: 102px 1fr; gap: 8px; font-size: 13px; line-height: 1.35; }
+      .custody dt { color: #8fa3c6; }
+      .custody dd { color: #edf2ff; margin: 0; }
+      .controls { display: flex; align-items: center; gap: 9px; margin: 18px 0 16px; flex-wrap: wrap; }
+      .control { border: 1px solid #3b4b70; background: #19243d; color: #edf2ff; padding: 10px 15px; border-radius: 10px; font-weight: 700; }
+      .control.primary { background: #8fb2ff; border-color: #8fb2ff; color: #0a1631; min-width: 106px; }
+      .control:disabled { cursor: not-allowed; opacity: .4; }
+      .step-count { margin-left: auto; color: #b4c1dc; font-size: 13px; font-variant-numeric: tabular-nums; }
+      .track { height: 6px; border-radius: 30px; background: #253350; overflow: hidden; margin-bottom: 13px; }
+      .track-fill { height: 100%; width: 0; background: linear-gradient(90deg, #6990ef, #a5c9ff); transition: width .3s; }
+      .steps { position: relative; display: flex; gap: 7px; overflow-x: auto; padding-bottom: 8px; scrollbar-color: #516487 transparent; }
+      .step-tab { border: 1px solid #2d3b5b; color: #aebbd5; background: #141d33; border-radius: 9px; padding: 8px 10px; white-space: nowrap; font-size: 12px; font-weight: 650; }
+      .step-tab[aria-current="step"] { background: #334c7e; border-color: #91b6ff; color: #f3f7ff; }
+      .footer { margin-top: 22px; color: #a1b1d1; font-size: 13px; line-height: 1.55; max-width: 880px; }
+      .footer strong { color: #d8e4ff; }
+      @media (max-width: 1150px) { .stage { grid-template-columns: 1fr; } .detail { min-height: 300px; } .diagram { min-height: 410px; } }
+      @media (max-width: 640px) { .page { padding: 24px 14px 50px; } .mode-note { width: 100%; margin-left: 0; } .diagram-wrap, .detail { border-radius: 14px; } .diagram-wrap { overflow-x: auto; } .diagram { min-width: 760px; min-height: 426px; } .mobile-hint { display: inline; } .detail { padding: 19px; } .custody .row { grid-template-columns: 88px 1fr; } }
+      @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }  }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <div class="topline">
+        <div>
+          <div class="eyebrow">RunPod sandbox · architecture example</div>
+          <h1>Follow the permission</h1>
+          <p class="intro">Start a sandbox, follow the Kimi conversation, then inspect permissions and Runpod actions. Watch each component’s state change.</p>
+        </div>
+      </div>
+
+      <div class="mode-row" role="group" aria-label="Session mode">
+        <button class="mode" id="jwt-mode" type="button" aria-pressed="true">Interactive · browser JWT</button>
+        <button class="mode" id="key-mode" type="button" aria-pressed="false">Auto · API key</button>
+        <button class="mode" id="oauth-mode" type="button" aria-pressed="false">Auto · OAuth</button>
+        <span class="mode-note" id="mode-note">Current OAuth PRs + proposed sandbox gateway</span>
+      </div>
+
+      <div class="view-row" role="group" aria-label="Architecture path">
+        <button class="mode" id="all-view" type="button" aria-pressed="true">Full flow</button>
+        <button class="mode" id="chat-view" type="button" aria-pressed="false">Chat + history</button>
+        <button class="mode" id="actions-view" type="button" aria-pressed="false">Setup + API access</button>
+        <p class="view-note">Two responsibilities in our backend: the chat relay streams and records Kimi activity; the action gateway enforces permissions before Runpod calls. They can live in the same service.</p>
+      </div>
+      <section class="policy-panel" aria-label="Permission and expiry policy">
+        <div class="scenario-row">
+          <label for="scenario">Example action</label>
+          <select id="scenario">
+            <option value="read">List pods · read only</option>
+            <option value="manual">Create pod · ask each time</option>
+          </select>
+          <span class="ttl-pill" id="ttl-status">Workspace TTL: 4h example</span>
+        </div>
+        <p id="policy-summary" aria-live="polite"></p>
+        <button class="control" id="credential-setup" type="button" hidden style="margin-top:12px;font-size:13px">View Auto credential setup →</button>
+        <p class="policy-state" id="policy-state" aria-live="polite"></p>
+        <details class="expiry-details">
+          <summary>Automatic expiry and rotation</summary>
+          <ul>
+            <li><strong>Workspace, Auto permission, sandbox token and model session:</strong> expire by the user-set workspace deadline. Activity and token refresh never move it. Four hours is illustrative.</li>
+            <li><strong>Approvals:</strong> short-lived, single-operation, exact parameters; unusable after their deadline, a policy change or workspace expiry.</li>
+            <li><strong>Auto-mode API key:</strong> absolute expiry no later than the workspace. Native API enforcement is required; until available, control-plane denial and revocation cleanup are the fallback.</li>
+            <li><strong>Auto-mode OAuth:</strong> access tokens last one hour in this model. Refresh access has a finite connection deadline; rotating tokens does not reset it. Workspace expiry blocks this workspace even if the account connection is still valid.</li>
+            <li><strong>Browser sessions, codes, assertions and service authentication:</strong> keep their issuer's expiry. Interactive requests reuse a valid browser JWT; the browser renews it before expiry. No stored user API key or OAuth refresh token is needed. Protected service keys rotate independently; retain old decryption versions only while valid ciphertext needs them.</li>
+            <li><strong>Data and compute:</strong> purge chat/Kimi history after 28 days. New agent-created compute gets an explicit auto-stop lifetime; deployments have their own deadline, and existing resources are untouched.</li>
+          </ul>
+        </details>
+      </section>
+      <div class="controls" role="group" aria-label="Walkthrough controls">
+        <button class="control" id="previous" type="button">← Back</button>
+        <button class="control primary" id="next" type="button">Next →</button>
+        <button class="control" id="play" type="button" aria-pressed="false">▶ Play all</button>
+        <button class="control" id="motion" type="button" aria-pressed="false">Pause motion</button>
+        <button class="control" id="permissions" type="button">Change permissions</button>
+        <button class="control" id="expiry" type="button">Show TTL expiry</button>
+        <button class="control" id="reset" type="button">Reset</button>
+        <span class="step-count" id="step-count"></span>
+      </div>
+      <div class="stage">
+        <section class="diagram-wrap" aria-label="Animated architecture diagram">
+          <div class="diagram-top"><strong id="diagram-heading">Follow the conversation</strong><span id="route-label"></span></div>
+          <svg class="diagram" viewBox="0 0 1000 790" role="img" aria-labelledby="svg-title svg-desc">
+            <title id="svg-title">Sandbox authorization architecture</title>
+            <desc id="svg-desc">Labeled credentials travel between the browser, sandbox, control plane, credential database, key service, RunPod Auth, REST v2 and Convex. Protected keys remain in the key service.</desc>
+            <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#b5a3ff" /></marker></defs>
+            <path class="boundary" id="backend-boundary" d="M350 19 H650 V709 H350 Z" />
+            <text class="boundary-label" x="370" y="40">CONTROL PLANE</text>
+            <text class="boundary-label" x="40" y="40">USER + SANDBOX</text>
+            <text class="boundary-label" x="700" y="40">PLATFORM + STORAGE</text>
+            <path class="guide" d="M170 243 H830 M170 483 H830 M170 723 H830" />
+            <path id="route" d="" marker-end="url(#arrow)" />
+            <g id="actors"></g>
+            <path id="packet-tether" fill="none" stroke="#91a9d4" stroke-width="1" stroke-dasharray="3 4" opacity=".5" />
+            <circle id="packet-dot" r="5" fill="#c3a7ff" stroke="#10182d" stroke-width="2" />
+            <g id="packet" class="credential-card" aria-hidden="true"></g>
+          </svg>
+          <div class="legend" aria-label="Credential legend">
+            <span><i style="--swatch:#c3a7ff"></i>Usable credential</span>
+            <span><i style="--swatch:#79ddc0"></i>Encrypted / hashed</span>
+            <span><i style="--swatch:#f0cd8d"></i>Protected key stays here</span>
+            <span><i style="--swatch:#91bdff"></i>Request / result</span>
+          </div>
+          <div class="diagram-caption">The moving dot follows the exchange; its floating label stays clear of the boxes. Small badges show custody after this exchange. All labels are examples. <span class="mobile-hint">Swipe to see the rest of the diagram.</span></div>
+        </section>
+        <section class="detail" aria-live="polite">
+          <div><div class="step-kicker" id="step-kicker"></div><h2 id="step-title"></h2><p id="step-description"></p><div class="exchange-progress" id="exchange-progress" aria-hidden="true"></div></div>
+          <div class="payload"><span class="payload-label">Moving</span><strong id="payload-text"></strong></div>
+          <div class="boundary-note" id="boundary-note"></div>
+          <button class="control" id="inspect-action" type="button" hidden>Inspect this Runpod action →</button>
+          <div class="custody"><h3 id="snapshot-title">State after this exchange</h3><p class="snapshot-note">Metadata in green changed in this exchange. IDs and durations are illustrative.</p><dl>
+            <div class="row"><dt>Browser</dt><dd id="browser-state"></dd></div>
+            <div class="row" id="relay-row"><dt>Chat relay</dt><dd id="relay-state"></dd></div>
+            <div class="row"><dt>Key service</dt><dd id="vault-state"></dd></div>
+            <div class="row"><dt data-db-label>Credential DB</dt><dd id="db-state"></dd></div>
+            <div class="row"><dt>Action gateway</dt><dd id="gateway-state"></dd></div>
+            <div class="row"><dt>Sandbox</dt><dd id="sandbox-state"></dd></div>
+            <div class="row"><dt>Convex</dt><dd id="convex-state"></dd></div>
+          </dl></div>
+        </section>
+      </div>
+      <div class="track" aria-hidden="true"><div class="track-fill" id="track-fill"></div></div>
+      <nav class="steps" id="steps" aria-label="Jump to a step"></nav>
+      <p class="footer" id="footer-note"></p>
+    </main>
+
+    <script>
+      // Architecture examples only: no credentials, API calls, or external dependencies.
+      const colors = {
+        credential: { fill: "#30244e", stroke: "#c3a7ff", text: "#e3d5ff", caption: "USABLE CREDENTIAL" },
+        sealed: { fill: "#143b35", stroke: "#79ddc0", text: "#b5f5e1", caption: "PROTECTED AT REST" },
+        protected: { fill: "#3e3221", stroke: "#f0cd8d", text: "#ffe2af", caption: "STAYS IN KEY SERVICE" },
+        message: { fill: "#1b3152", stroke: "#91bdff", text: "#d1e5ff", caption: "REQUEST / RESULT" },
+        empty: { fill: "#172139", stroke: "#344765", text: "#a1b2cd", caption: "" }
+      };
+      const actors = {
+        browser: { x: 170, y: 90, title: "Browser", sub: "Alice approves", index: "01 / USER" },
+        vault: { x: 500, y: 90, title: "Key service", sub: "KMS / protected signing service", index: "02 / PROTECTED KEYS" },
+        auth: { x: 830, y: 90, title: "RunPod Auth", sub: "Issues and revokes credentials", index: "03 / PLATFORM" },
+        sandbox: { x: 170, y: 330, title: "Sandbox agent", sub: "Proposes typed operations", index: "04 / WORKLOAD" },
+        gateway: { x: 500, y: 330, title: "Action gateway", sub: "Approval + permission + limits", index: "05 / POLICY ENFORCEMENT" },
+        rest: { x: 830, y: 330, title: "REST v2", sub: "Enforces API credential scope", index: "06 / API" },
+        db: { x: 500, y: 570, title: "Credential DB", sub: "Ciphertext, policy, token hash", index: "07 / PRIVATE STORAGE" },
+        convex: { x: 830, y: 570, title: "Convex", sub: "Redacted activity · 28 days", index: "08 / RUN HISTORY" },
+        relay: { x: 500, y: 90, title: "Chat relay", sub: "Messages, stream and collection", index: "02 / CHAT + HISTORY" }
+      };
+      const badge = (label, kind = "message") => ({ label, kind });
+      const credential = label => badge(label, "credential");
+      const sealed = label => badge(label, "sealed");
+      const exchange = (from, to, items, description, state = {}) => ({ from, to, items, description, state });
+      const phase = (short, title, boundary, exchanges) => ({ short, title, boundary, exchanges });
+      const initialParams = new URLSearchParams(window.location.search);
+      const selectedParam = (name, allowed, fallback) => allowed.includes(initialParams.get(name)) ? initialParams.get(name) : fallback;
+      let scenario = selectedParam("scenario", ["read", "manual"], "read");
+      let mode = selectedParam("mode", ["jwt", "key", "oauth"], "jwt");
+      let view = selectedParam("view", ["all", "chat", "actions"], "all");
+      const scenarios = {
+        read: { operation: "listPods", request: "GET /pods", result: "Pod list + request ID", auto: false },
+        manual: { operation: "createPod", request: "POST /pods", result: "New pod ID + request ID" }
+      };
+      const configure = () => phase("Create sandbox", "Step 0: create the sandbox", "Scope is chosen at app/workspace setup and explicitly reconfirmed when enabling or widening Auto. Auto cannot exceed the RunPod credential's scope. Increasing platform scopes requires new consent or key issuance.", [
+        exchange("browser", "gateway", [credential("Browser JWT"), badge(scenario === "read" ? "Read scope + 4h TTL" : "Read + create scope · 4h")], mode !== "jwt" ? (scenario === "read" ? "Alice explicitly enables unattended read-only access and credential storage for four hours. This scope does not permit billable or create/update/delete operations." : "Alice explicitly enables Auto with a spending warning. She permits createPod within selected resources, spend/rate limits and a four-hour deadline; update/delete remain outside this example's Auto scope.") : "Alice selects the allowed operations and a four-hour workspace lifetime. Interactive mode uses her browser JWT transiently; it creates no stored RunPod API key or OAuth refresh token. Non-billable reads need no prompt. Every billable, create, update or delete operation requires its own approval.", { gateway: badge("Owner + scope + deadline") }),
+        { ...exchange("gateway", "db", [badge("Policy v1 + expiresAt")], "Before creating resources, save the verified account, scope, approval mode and absolute deadline. The sandbox cannot edit this record.", { db: badge("Policy v1 saved"), gateway: badge("Enforcing policy v1") }), policy: { version: 1, scope: scenario === "read" ? "read" : "create", hours: 4 } },
+        exchange("gateway", "rest", [credential("Browser JWT"), badge("Create sandbox · 4h limit")], "The user's Start confirmation approves this billable sandbox creation and lifetime. The backend submits it with the browser JWT and a stable operation ID; saving read-only agent scope does not give the agent permission to create more resources.", { sandbox: badge("Starting · ws_demo_01"), rest: badge("Sandbox create requested") }),
+        exchange("rest", "gateway", [badge("Sandbox ID + ready status")], "Record the created sandbox ID after readiness is confirmed. The next step issues its workspace identity. If creation times out, reconcile by operation ID before retrying.", { sandbox: badge("Ready · ws_demo_01"), gateway: badge("Workspace ready"), rest: badge("Sandbox ready confirmed") }),
+        { ...exchange("gateway", "browser", [badge("Workspace ready · policy v1")], "Confirm the workspace identity, saved scope and absolute deadline to the browser.", { browser: badge("Workspace ready · v1") }), meta: { browserPolicy: 1 } }
+      ]);
+      const changePermissions = () => phase("Edit permissions", "Only the browser can change policy", "The browser submits an authenticated settings change. The backend checks ownership and platform limits. Narrowing applies immediately; widening beyond an Auto key or OAuth scope requires new issuance or consent. Kimi cannot change its own scope or TTL.", [
+        exchange("browser", "gateway", [credential("Browser JWT"), badge("Read only · deadline +2h")], "Alice uses workspace settings to narrow scope to reads and shorten the absolute deadline from four to two hours after creation. The saved policy is still v1 until the backend accepts the change.", { browser: badge("Requested policy update") }),
+        { ...exchange("gateway", "db", [badge("Save policy v2 atomically")], "Save policy v2, invalidate incompatible pending approvals and recheck queued actions. Keep the same workspace ID and token; permissions come from this server-side record.", { gateway: badge("Enforcing policy v2"), db: badge("Policy v2 saved") }), policy: { version: 2, scope: "read", hours: 2 } },
+        { ...exchange("gateway", "browser", [badge("Updated scope + expiry")], "The browser shows the confirmed policy. Chat may continue within its session budget, but all subsequent Runpod actions use v2. Shortening past the current time triggers immediate expiry.", { browser: badge("Settings confirmed · v2") }), meta: { browserPolicy: 2 } },
+        exchange("sandbox", "gateway", [credential("Same workspace token"), badge("createPod after update")], "The token still identifies the same sandbox, but createPod is now outside scope. The gateway rejects it; no request goes to REST v2, even if an older approval or Auto rule allowed it.", { gateway: badge("Denied · createPod"), rest: badge("No createPod call") }),
+        exchange("gateway", "convex", [badge("Policy v2 + denial record")], "Record the settings change and denial with the actor, policy version and operation ID. The browser can show why the request was refused.")
+      ]);
+      const expire = () => phase("TTL expiry", "Time is up: access stops automatically", "Expiry is checked on every request, not just by a cleanup job. Stop new work first, then retry cleanup until actual termination is confirmed. Activity, reconnect and OAuth refresh do not extend the deadline.", [
+        exchange("gateway", "db", [badge("Expire workspace + Auto")], "At the user-set deadline, disable the workspace permission, pending approvals, workspace token and model-session credential. Even reads are denied after expiry.", { gateway: badge("Expired · all actions denied", "empty"), sandbox: badge("Token + session expired", "empty"), db: badge("Workspace binding expired", "empty"), rest: badge("No further workspace calls", "empty") }),
+        exchange("gateway", "sandbox", [badge("Stop sandbox + model session")], "Stop the sandbox and dedicated model resources at their deadlines. A background reconciler retries failures, with platform-enforced sandbox lifetime as a backstop. Other user deployments follow their separately approved lifetimes.")
+      ]);
+      const workspace = () => phase("Sandbox token", "A separate token identifies the sandbox", mode === "jwt" ? "The workspace token identifies the sandbox to the control plane. The browser JWT separately authorizes the REST call and is never stored in this database or given to the sandbox." : "Two credentials: the encrypted RunPod key (or OAuth credential) lets the control plane call RunPod. The workspace token only authenticates the sandbox to the control plane. Its hash verifies identity; policy grants permission.", [
+        exchange("gateway", "db", [sealed("Hash of sandbox token"), badge("Owner + policy + expiry")], "Create a random workspace token and store only its hash. When the sandbox presents the token, hash it and compare with this record, then check scope and expiry. This hash is never decrypted or sent to REST v2. It is separate from the credential used for the RunPod API call.", { db: sealed((mode === "jwt" || view === "chat") ? "Policy + token hash only" : "Ciphertext + policy + hash") }),
+        exchange("gateway", "sandbox", [credential("Workspace token")], "The sandbox receives the usable workspace token over a protected connection. RunPod API credentials stay in the trusted backend.", { sandbox: credential("Workspace token only") })
+      ]);
+      const propose = () => {
+        const action = scenarios[scenario];
+        const title = scenario === "read" ? "Read within scope, without a prompt" : mode !== "jwt" ? "Auto checks the scope Alice set" : "A billable change needs Alice's approval";
+        return phase("Request + approve", title, "The control plane classifies the operation server-side. Non-billable reads within scope proceed. Every billable or create/update/delete operation needs exact approval unless an unexpired Auto rule explicitly allows it. Out-of-scope requests are denied.", [
+          exchange("sandbox", "gateway", [credential("Workspace token"), badge(action.operation + " proposal")], scenario === "read" ? "Kimi requests listPods. The control plane verifies token, owner, scope, resource access, limits and expiry. This is a non-billable read, so no browser approval is needed." : mode !== "jwt" ? "Kimi requests createPod. The control plane verifies identity and the unexpired Auto rule: operation, parameters, resources, budget and lifetime must all fit. Being in Auto mode alone grants nothing." : "Kimi requests createPod. Scope and expiry pass, but creating a resource is billable and requires a fresh user approval in manual mode."),
+          ...(scenario === "manual" && mode === "jwt" ? [
+            exchange("gateway", "browser", [badge("Action + cost + resource TTL")], "Show the exact createPod parameters, expected cost and resource lifetime. If Alice is away, wait; the pending request expires automatically."),
+            exchange("browser", "gateway", [credential("Browser JWT"), badge("One-use approval + expiry")], "Alice approves this exact operation. The control plane verifies the JWT and its user/team binding, checks approval expiry and current policy, then consumes approval atomically with the action ID. A changed request needs a new approval.")
+          ] : [])
+        ]);
+      };
+      const browserAway = () => phase("Browser away", "Auto continues without the browser", "Auto was explicitly enabled at setup. Every unattended request still needs a valid workspace token, matching scope, available budget and unexpired permission.", [
+        exchange("browser", "gateway", [badge("Browser disconnects")], "Alice closes the browser. The control plane already has Auto permission and its protected credential. It can continue within those limits without fetching a browser JWT.", { browser: badge("Offline · Auto can continue", "empty") })
+      ]);
+      const results = () => phase("Result + history", "Return the result and remember the work", "No credentials enter chat or logs. Redacted Kimi events use a run ID and sequence so the browser can resume from Convex, within the 28-day retention window.", [
+        exchange("rest", "gateway", [badge(scenarios[scenario].result)], "REST v2 returns the result to the control plane. The control plane records the outcome and whether authority came from read scope, exact approval or an Auto rule."),
+        exchange("gateway", "sandbox", [badge("Allowed result")], "Kimi receives the result. The browser JWT, OAuth token or API key is stripped from the response path."),
+        exchange("gateway", "convex", [badge("Redacted activity event")], "The action gateway records its decision and result. The separate chat relay records Kimi conversation events beside the Assistant chat. Never log authorization headers or secret values.", { convex: badge("Events · 28-day retention") }),
+        exchange("convex", "browser", [badge("Missed events + status")], mode === "jwt" ? "The browser reloads missed events. Fresh API work still needs a valid browser JWT; sandbox compute alone does not grant API access." : "Alice returns and reads the saved activity. Work continued under Auto permission, not her browser session.", { browser: credential("Browser session / JWT") })
+      ]);
+      function protect(label, storedLabel) {
+        return [
+          exchange("gateway", "vault", [credential(label), badge("Service-authenticated request")], "Using its service identity, the trusted backend asks the key service to encrypt this credential. The encryption key remains in that service."),
+          exchange("vault", "gateway", [sealed(storedLabel)], "The key service returns ciphertext. Its protected decryption key is never returned."),
+          exchange("gateway", "db", [sealed(storedLabel)], "The control plane stores ciphertext under the owner and policy binding, then drops the plaintext copy. On refresh, it atomically replaces the previous encrypted token.", { db: sealed(storedLabel), gateway: label.includes("refresh") || label.includes("Refresh") ? credential("Access token in memory") : badge("Plaintext copy released") })
+        ];
+      }
+      function decrypt(label, storedLabel) {
+        return [
+          exchange("db", "gateway", [sealed(storedLabel)], "After permission checks, the control plane reads the encrypted credential bound to this user and workspace."),
+          exchange("gateway", "vault", [sealed(storedLabel), badge("Service-authenticated request")], "The key service checks the control plane's service identity and decryption permissions. Database access alone is insufficient."),
+          exchange("vault", "gateway", [credential(label)], "The usable credential is returned only to the trusted control plane, briefly in memory. The decryption key stays in the key service.", { gateway: credential(label + " in memory") })
+        ];
+      }
+      function sign() {
+        return [
+          exchange("gateway", "vault", [badge("App assertion to sign"), badge("Service-authenticated request")], "The control plane authenticates with its service identity and asks its protected signing service to sign a short-lived assertion for RunPod Auth."),
+          exchange("vault", "gateway", [credential("Signed app assertion")], "The service returns the signature. The app's private key stays protected; RunPod verifies the assertion with the registered public key.")
+        ];
+      }
+      function buildFlows() { return {
+        jwt: {
+          note: "Interactive · no stored RunPod credential",
+          footer: "Interactive agent requests still pass through control-plane policy and approval checks. REST v2 uses the user's browser JWT. Browser token availability is a runtime dependency; do not silently fall back to an Auto credential.",
+          initial: { vault: badge("Not used for this path", "empty"), auth: badge("No key or app issuance", "empty"), gateway: badge("JWT transiently only", "empty"), db: badge("No user credential stored", "empty") },
+          phases: [
+            configure(), workspace(), propose(),
+            ...(scenario === "read" ? [phase("Browser JWT", "The browser supplies a valid JWT", "A valid JWT may authorize multiple requests until expiry. The signed-in browser renews it when needed; the control plane does not persist it or mint it on its own.", [
+              exchange("gateway", "browser", [badge("Pending read + operation ID")], "The control plane requests authorization for this read from the user's browser session. This is token delivery, not a per-read approval prompt."),
+              exchange("browser", "gateway", [credential("Valid browser JWT"), badge("Bound operation ID")], "The browser supplies a valid JWT. The control plane verifies identity, account/team, operation binding and expiry, without saving the token to its database.", { gateway: credential("JWT briefly in memory") })
+            ])] : []),
+            phase("Call API", "Use the browser JWT at REST v2", "The control plane checks the typed request and policy. REST v2 validates the browser JWT. The sandbox never receives this JWT or any platform credential.", [
+              exchange("gateway", "rest", [credential("Browser JWT"), badge(scenarios[scenario].request)], "Forward the allowed request with the browser JWT. Reads need no separate approval; billable/create/update/delete requests need exact user approval. Release the transient token after the call.", { gateway: badge("JWT released after call"), rest: badge("Validates user JWT") })
+            ]),
+            results(),
+            phase("Browser unavailable", "Wait when browser authorization is unavailable", "No automatic switch to stored keys. An already-authorized, in-flight operation may finish; sandbox compute continues only within its own TTL. New operations wait if a valid browser token cannot be supplied.", [
+              exchange("gateway", "db", [badge("Waiting for browser session")], "Record the waiting action without storing a JWT. A hidden tab may still respond, but browser suspension, disconnection or an expired session can prevent renewal. Pending approvals expire as usual.", { gateway: badge("Waiting · no API calls", "empty"), rest: badge("No fresh authorized call", "empty"), browser: badge("Unavailable · needs session", "empty") }),
+              exchange("gateway", "browser", [badge("Reconnect or enable Auto")], "Alice can return with a valid session, or explicitly enable Auto with scope, limits, expiry and consent to credential storage. Enabling Auto is a separate decision.")
+            ]),
+            changePermissions(), expire()
+          ]
+        },
+        oauth: {
+          note: "Auto · OAuth option for unattended work",
+          footer: "Auto-mode OAuth option for unattended work. Interactive mode uses the browser JWT without storing this credential. This example uses a protected signing/decryption service; the production secret infrastructure and shared-app consent path must be wired into the implementation.",
+          initial: { vault: badge("Signing + decryption keys", "protected"), gateway: badge("No user tokens yet", "empty"), db: badge("No user tokens yet", "empty") },
+          phases: [
+            configure(),
+            phase("Register", "Register the Assistant app", "For the Auto-mode OAuth option, one app signing key belongs to the service. Alice does not get a private key. Only the public key is registered with RunPod.", [
+              exchange("gateway", "auth", [badge("App public key"), badge("Callback URL + scopes")], "RunPod records the app's public key, redirect URL and maximum scopes. The matching private key remains in the protected signing service.", { auth: badge("App public key registered") })
+            ]),
+            phase("Consent + code", "Alice connects her account", "The browser carries a one-time code, not the app private key or refresh token. The control plane validates the callback's state and uses PKCE.", [
+              exchange("browser", "auth", [credential("Browser session"), badge(scenario === "read" ? "Consent: pods:read" : "Consent: read + create")], "Alice consents to the platform scopes required for the selected actions and a finite connection lifetime. This is the scope ceiling; the control plane can enforce narrower workspace and Auto rules.", { auth: badge("Alice's app connection") }),
+              exchange("auth", "browser", [credential("One-time auth code")], "RunPod redirects Alice's browser to the registered callback with a short-lived authorization code."),
+              exchange("browser", "gateway", [credential("One-time auth code"), badge("Callback state")], "The browser delivers the code and state to the backend callback. The PKCE verifier is already held by the control plane.", { gateway: credential("Code + PKCE verifier") })
+            ]),
+            phase("Exchange", "Prove the app identity", "The signed assertion proves possession of the app key. The private key is never sent to RunPod Auth.", [
+              ...sign(),
+              exchange("gateway", "auth", [credential("Auth code + PKCE verifier"), credential("Signed app assertion")], "The control plane exchanges the code using PKCE and a signed app assertion. RunPod checks the app identity and Alice's consent."),
+              exchange("auth", "gateway", [credential("Access token · 1 hour"), credential("Rotating refresh token")], "RunPod returns an access token and refresh token for Alice's approved app connection. Neither goes to the sandbox.", { gateway: credential("Access + refresh in memory") })
+            ]),
+            phase("Store", "Protect the refresh credential", "Ciphertext lives in the credential DB. The decryption key and app signing key live separately in the key service.", [
+              ...protect("Refresh token", "Encrypted refresh token"),
+            ]),
+            workspace(), browserAway(), propose(),
+            phase("Call API", "The control plane calls RunPod", "The control plane applies workspace restrictions; REST v2 also enforces OAuth scopes. Account scopes alone do not express resource IDs or spending limits.", [
+              exchange("gateway", "rest", [credential("Access token · 1 hour"), badge(scenarios[scenario].request)], "After the applicable read, manual-approval or Auto checks and an expiry recheck, the control plane constructs the allowed API request. REST v2 validates the access token.", { gateway: credential("Access token in memory"), rest: badge("Checks token + scope") })
+            ]),
+            results(),
+            phase("Refresh", "Refresh without an open browser", "Refresh requires an active connection and unexpired workspace permission. A new token does not extend either deadline or widen scope. Coordinate refreshes to avoid reusing an old rotating token.", [
+              ...decrypt("Refresh token", "Encrypted refresh token"), ...sign(),
+              exchange("gateway", "auth", [credential("Current refresh token"), credential("Signed app assertion")], "The control plane checks the absolute connection and workspace deadlines before requesting new tokens with the current refresh token and its app identity."),
+              exchange("auth", "gateway", [credential("New access token · 1 hour"), credential("New refresh token")], "RunPod rotates the refresh token. The control plane protects the replacement before completing the update.", { gateway: credential("New tokens in memory") }),
+              ...protect("New refresh token", "New encrypted refresh"),
+            ]),
+            changePermissions(), expire(),
+            phase("Disconnect", "Alice disconnects the app", "Stopping one workspace removes that workspace's authority. Disconnecting the app is a separate account-level action; token invalidation follows RunPod's enforcement behavior.", [
+              exchange("browser", "auth", [credential("Browser session"), badge("Revoke app connection")], "Alice disconnects the app in RunPod. RunPod ends the connection and rejects further refreshes.", { auth: badge("Connection revoked") }),
+              exchange("gateway", "db", [badge("Delete token + disable binding")], "The control plane blocks further use, removes its encrypted refresh copy and disables affected workspace bindings. Redacted history remains.", { db: badge("Credential copy deleted", "empty"), gateway: badge("API work blocked", "empty"), sandbox: badge("Workspace access revoked", "empty"), rest: badge("No further calls", "empty") })
+            ])
+          ]
+        },
+        key: {
+          note: "Auto · stored API key for unattended work",
+          footer: "Store a scoped API key only after the user enables Auto. Interactive mode uses the browser JWT. Proposed native key expiry requires platform enforcement. Control-plane policy can be narrower than the key. KMS protects stored ciphertext; it does not prevent an authorized but compromised backend from decrypting credentials.",
+          initial: { vault: badge("Protected decryption key", "protected"), gateway: badge("No user key yet", "empty"), db: badge("No user key yet", "empty") },
+          phases: [
+            configure(),
+            phase("Approve + issue", "Enable Auto and create its key", "Only explicit Auto enablement authorizes creating and storing this key. Interactive mode instead forwards the browser JWT. Unattended work stays inside the Auto scope and deadline.", [
+              exchange("gateway", "auth", [credential("Browser JWT"), badge("Scoped key · TTL ≤ workspace")], "The trusted backend requests a scoped, expiring key using Alice's current authenticated authorization. The exact issuance route is a platform integration.", { auth: badge("Authenticated key issuance") }),
+              exchange("auth", "gateway", [credential("API key · expires at start +4h")], "RunPod returns the usable key once. The proposed platform metadata includes scope and expiry; the sandbox receives none of this key.", { gateway: credential("Raw API key in memory"), auth: sealed("Key verifier + scope + expiry") })
+            ]),
+            phase("Encrypt + store", "Store ciphertext, keep keys separate", "A database leak exposes ciphertext. Decryption additionally requires the control plane's authorized service identity and access to the key service.", protect("RunPod API key", "Encrypted API key")),
+            workspace(), browserAway(), propose(),
+            phase("Decrypt", "Retrieve the credential for this action", "The control plane rechecks permission before decrypting. The key service releases the API credential to this trusted process, never its own decryption key.", decrypt("RunPod API key", "Encrypted API key")),
+            phase("Call API", "The control plane calls RunPod", "The control plane enforces workspace policy. REST v2 must also enforce the key's platform scope and expiry, even if the API key is used directly.", [
+              exchange("gateway", "rest", [credential("RunPod API key"), badge(scenarios[scenario].request)], "The control plane sends the allowed HTTP request with the decrypted API key, then drops the plaintext when it is no longer needed.", { gateway: badge("Plaintext released after call"), rest: badge("Checks key + scope + expiry") })
+            ]),
+            results(),
+            changePermissions(), expire(),
+            phase("Stop", "Revoke access when the workspace ends", "The control plane first blocks new actions, then revokes and cleans up. Resource shutdown must be monitored separately until termination is confirmed.", [
+              exchange("gateway", "auth", [badge("Revoke workspace key")], "The trusted backend requests revocation through its authorized platform integration. Platform-enforced expiry is an additional backstop.", { auth: badge("Workspace key revoked"), sandbox: badge("Workspace access revoked", "empty"), gateway: badge("API work blocked", "empty"), rest: badge("No further calls", "empty") }),
+              exchange("gateway", "db", [badge("Delete encrypted key + binding")], "Remove the encrypted API key and workspace credential binding. Redacted audit and Kimi history retain their own retention policy.", { db: badge("Credential copy deleted", "empty") })
+            ])
+          ]
+        }
+      }; }
+      function buildChatFlow() {
+        return {
+          note: mode === "jwt" ? "Interactive chat · API actions still need browser auth" : "Auto chat · permitted API work can continue unattended",
+          footer: "Proposed chat relay and durable collector. The prototype already relays Kimi streams; collection independent of browser/HTTP-request lifetime, replay and gap handling still need implementation. The two backend responsibilities need not be separate services.",
+          initial: { browser: badge("Connected"), relay: badge("Session relay ready"), gateway: badge("Policy not set yet", "empty"), db: badge("No workspace yet", "empty"), sandbox: badge("Not created yet", "empty"), vault: badge("See Setup + API access", "empty"), auth: badge("See Setup + API access", "empty") },
+          phases: [
+            configure(), workspace(),
+            phase("Send message", "A live conversation, through the relay", "Chat uses the same relay in Interactive and Auto modes. Authenticate the user and bind every message and subscription to the correct workspace. A chat message is not approval for a Runpod operation.", [
+              exchange("browser", "relay", [badge("User message · run_demo_01")], "Alice sends a chat message. The backend verifies workspace ownership and routes it to the existing Kimi session.", { relay: badge("Owner checked · connected") }),
+              exchange("relay", "sandbox", [badge("Prompt + Kimi session ID")], "The relay sends the prompt to Kimi over its authenticated session connection. The browser does not need a direct socket to the sandbox.", { sandbox: badge("Kimi working") })
+            ]),
+            phase("Stream + save", "Stream the reply and save its history", "Collect visible replies, tool activity and results. Redact secrets before durable storage. Stable event IDs and sequence numbers make replay and deduplication possible.", [
+              { ...exchange("sandbox", "relay", [badge("Reply delta · event 1")], "Kimi emits its next visible reply or tool-activity event. The relay receives it as part of the ongoing stream.", { relay: badge("Streaming Kimi events") }), meta: { relaySeq: 1 } },
+              { ...exchange("relay", "convex", [badge("Redacted event 1 + run ID")], "Persist the event with its workspace, run and sequence. The example persists before confirming delivery; failed writes retry without duplicating the event.", { convex: badge("Event 1 saved · 28 days") }), meta: { savedSeq: 1 } },
+              { ...exchange("relay", "browser", [badge("Live reply · event 1")], "Deliver the reply incrementally. The browser records the last received sequence; normal chat does not pass through the Runpod approval gate.", { browser: badge("Live chat connected") }), meta: { browserSeq: 1 } }
+            ]),
+            phase("Runpod request", "A Runpod operation takes the other path", "The chat relay transports messages. The action gateway authorizes Runpod operations. Neither a chat message nor a streamed tool event counts as permission to execute a billable action.", [
+              exchange("sandbox", "gateway", [credential("Workspace token"), badge(scenarios[scenario].operation + " proposal")], "Kimi proposes a Runpod operation. The gateway checks identity, current policy, limits and expiry. Use Inspect this Runpod action to see the JWT or Auto credential path.", { gateway: badge("Checking Runpod request") }),
+              exchange("gateway", "relay", [badge("Operation status for chat")], "Show a pending or approval-needed status in the chat. This status event does not itself execute or approve the operation.", { relay: badge("Chat + operation status") })
+            ]),
+            phase("Browser away", "Collection continues after the tab closes", mode === "jwt" ? "Sandbox code and event collection may continue until TTL. Fresh Runpod API work waits when the browser cannot supply a valid JWT; browser loss does not enable Auto." : "Auto Runpod work may continue only within its stored scope and expiry. The backend collector keeps recording Kimi activity independently of the browser connection.", [
+              exchange("browser", "relay", [badge("Browser disconnects")], "The browser connection closes. The backend collector remains attached to the Kimi session; it is not owned by this browser request.", { browser: badge("Offline · last seen event 1", "empty"), relay: badge("Collecting · browser offline") }),
+              { ...exchange("sandbox", "relay", [badge("Background event 2")], "Kimi emits another reply or progress event while Alice is away. Chat collection does not require her Runpod JWT.", { sandbox: badge("Working within session TTL") }), meta: { relaySeq: 2 } },
+              { ...exchange("relay", "convex", [badge("Persist missed event 2")], "Save the event even though there is no live browser subscriber.", { convex: badge("Events through 2 saved") }), meta: { savedSeq: 2 } }
+            ]),
+            phase("Reconnect", "Replay missed events, then follow live", "History access is authorized against the user and workspace. Resume after the last received sequence and deduplicate overlapping live events; never replay a chat message as a new operation.", [
+              exchange("browser", "relay", [badge("Reconnect · after event 1")], "Alice returns. The relay verifies her current session and workspace access before replaying history.", { browser: badge("Reconnected · catching up") }),
+              exchange("relay", "convex", [badge("Read this run after seq 1")], "Read the saved events after Alice's cursor within the 28-day retention window."),
+              exchange("convex", "relay", [badge("Missed event 2")], "Convex returns the missing event; the relay merges it with any new live events without duplicates."),
+              { ...exchange("relay", "browser", [badge("Replay 2 · follow live")], "The browser now shows event 2 and follows the stream again. Reconnecting does not extend workspace permissions or TTL.", { browser: badge("Caught up · live"), relay: badge("Live relay + collector") }), meta: { browserSeq: 2 } }
+            ]),
+            phase("Collector recovery", "Recover a dropped backend connection", "A browser disconnect and a collector failure are different. The collector resumes from its saved cursor where Kimi history permits; show a visible gap if source history cannot be recovered.", [
+              exchange("relay", "sandbox", [badge("Resume after saved event 2")], "After a collector restart or lost Kimi connection, restore the workspace/run binding and resubscribe from the saved position. Do not resend the user's prompt.", { relay: badge("Reconnecting to Kimi") }),
+              exchange("sandbox", "relay", [badge("Replay available events")], "Recover available session events and deduplicate by stable source ID. If the sandbox is gone or history is unavailable, record a gap rather than inventing missing activity.", { relay: badge("Recovered or gap reported") })
+            ]),
+            changePermissions(),
+            phase("TTL expiry", "Stop the session, keep retained history", "Expiry cuts off new prompts, model sessions and Runpod authority. Closing the live session does not erase the retained chat; history still follows the 28-day purge rule.", [
+              exchange("gateway", "relay", [badge("Workspace deadline reached")], "Reject new prompts and close live access when the authoritative workspace deadline is reached. The collector may finalize shutdown records through its backend service authority.", { gateway: badge("Expired · all actions denied", "empty"), relay: badge("Finalizing session"), browser: badge("Expired · history available", "empty"), rest: badge("No further workspace calls", "empty") }),
+              exchange("gateway", "sandbox", [badge("Stop sandbox + model session")], "Stop workspace compute and revoke session credentials. Reconcile until actual termination is confirmed.", { sandbox: badge("Stopping · access expired", "empty") }),
+              exchange("relay", "convex", [badge("Final status · retain 28 days")], "Save the observed final status and keep the event history for its retention window. A stop request alone is not proof of termination.", { relay: badge("Live stream closed", "empty"), convex: badge("History retained · 28 days") })
+            ])
+          ]
+        };
+      }
+      function buildCombinedFlow() {
+        const base = flows[mode], chat = buildChatFlow();
+        const chatPhase = name => chat.phases.find(p => p.short === name);
+        const phases = [];
+        for (const p of base.phases) {
+          // Collection continues across the same API journey, not a new session.
+          if (p.short === "Browser away") continue;
+          if (p.short === "Result + history") {
+            phases.push({ ...p, exchanges: p.exchanges.slice(0, 3) });
+            if (mode !== "jwt") phases.push(chatPhase("Reconnect"), chatPhase("Collector recovery"));
+            continue;
+          }
+          if (p.short === "Browser unavailable") {
+            phases.push(chatPhase("Browser away"), p, chatPhase("Reconnect"), chatPhase("Collector recovery"));
+            continue;
+          }
+          if (p.short === "TTL expiry") {
+            const chatExpiry = chatPhase("TTL expiry");
+            phases.push({ ...p, exchanges: [p.exchanges[0], ...chatExpiry.exchanges] });
+            continue;
+          }
+          phases.push(p);
+          if (p.short === "Sandbox token") {
+            phases.push(chatPhase("Send message"), chatPhase("Stream + save"));
+            if (mode !== "jwt") phases.push(chatPhase("Browser away"));
+          }
+        }
+        return {
+          ...base,
+          note: "Full journey · setup → credentials → chat → API → history → expiry",
+          footer: `${base.footer} Chat collection, replay and recovery are proposed additions to the existing relay.`,
+          initial: { ...base.initial, browser: badge("Connected"), relay: badge("Session relay ready"), sandbox: badge("Not created yet", "empty") },
+          phases
+        };
+      }
+      const currentFlow = () => view === "chat" ? buildChatFlow() : view === "all" ? buildCombinedFlow() : flows[mode];
+      let flows = buildFlows();
+      const $ = id => document.getElementById(id);
+      const actorName = id => id === "db" && (mode === "jwt" || view === "chat") ? "Workspace records" : actors[id].title;
+      const svgNS = "http://www.w3.org/2000/svg";
+      let phaseIndex = 0, exchangeIndex = 0;
+      let timer = null, animation = null, motionPaused = false;
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+      function svg(tag, attributes = {}, text) {
+        const el = document.createElementNS(svgNS, tag);
+        for (const [key, value] of Object.entries(attributes)) el.setAttribute(key, String(value));
+        if (text !== undefined) el.textContent = text;
+        return el;
+      }
+      const basePositions = Object.fromEntries(Object.entries(actors).map(([id,a]) => [id, { x:a.x, y:a.y }]));
+      function renderActors() {
+        const chatPositions = { relay: {x:500,y:330}, gateway:{x:500,y:570}, convex:{x:830,y:330}, rest:{x:830,y:570}, db:{x:830,y:90} };
+        $("actors").replaceChildren();
+        $("backend-boundary").setAttribute("d", view === "all" ? "M350 19 H650 V709 H20 V510 H350 Z" : "M350 19 H650 V709 H350 Z");
+        for (const [id, actor] of Object.entries(actors)) {
+          Object.assign(actor, view === "chat" ? (chatPositions[id] ?? basePositions[id]) : view === "all" && id === "relay" ? {x:170,y:570} : basePositions[id]);
+          const node = svg("g", { class: "node", "data-actor": id });
+          if ((view === "chat" && ["vault","auth"].includes(id)) || (view === "actions" && id === "relay")) node.style.display = "none";
+          node.append(svg("rect", { x: actor.x - 130, y: actor.y - 47, width: 260, height: 98 }));
+          node.append(svg("text", { class: "index", x: actor.x - 111, y: actor.y - 24 }, view === "all" && id === "relay" ? "CONTROL PLANE / CHAT" : actor.index));
+          node.append(svg("text", { x: actor.x - 111, y: actor.y + 4 }, actor.title));
+          node.append(svg("text", { class: "sub", x: actor.x - 111, y: actor.y + 27 }, actor.sub));
+          node.append(svg("g", { class: "stored", id: `stored-${id}` }));
+          node.append(svg("g", { class: "actor-meta", id: `meta-${id}` }));
+          $("actors").append(node);
+        }
+      }
+      function snapshotBefore(count) {
+        const snap = { policy: { version:0, scope:"none", hours:0 }, meta: { relaySeq:0, savedSeq:0, browserSeq:0, browserPolicy:0 } };
+        for (const step of currentFlow().phases.flatMap(p=>p.exchanges).slice(0,count)) {
+          if(step.policy) snap.policy = step.policy;
+          if(step.meta) Object.assign(snap.meta,step.meta);
+        }
+        return snap;
+      }
+      function scopeName(policy) { return policy.scope === "none" ? "Not configured" : policy.scope === "read" ? "Read only" : "Read + create"; }
+      function componentMetadata(snap) {
+        const p = snap.policy, scope = scopeName(p);
+        const rule = p.version ? `v${p.version} · ${scope} · start +${p.hours}h` : "No policy yet";
+        return {
+          browser: ["alice · ws_demo_01", `Seen event ${snap.meta.browserSeq} · policy v${snap.meta.browserPolicy}`],
+          relay: ["run_demo_01 · owner-bound", `Received ${snap.meta.relaySeq} · saved ${snap.meta.savedSeq}`],
+          sandbox: ["ws_demo_01 · same identity", `Server policy: ${rule}`],
+          gateway: [rule, "Writes: workspace-owned resources"],
+          db: [rule, "Policy changes: browser user only"],
+          convex: [`Saved through event ${snap.meta.savedSeq}`, "Redacted history · purge after 28d"],
+          auth: [scenario === "read" ? "Platform ceiling: read" : "Platform ceiling: read + create", "Narrower workspace policy still applies"],
+          rest: [mode === "jwt" ? "Credential: user JWT" : mode === "key" ? "Credential: Auto API key" : "Credential: OAuth access", "Issuer checks + gateway policy"],
+          vault: ["Protected key version: k1", "Service rotation; no workspace TTL"]
+        };
+      }
+      function renderMetadata(complete) {
+        const snap = snapshotBefore(complete+1), previous = componentMetadata(snapshotBefore(complete)), current = componentMetadata(snap);
+        for (const [id, lines] of Object.entries(current)) {
+          const group = $(`meta-${id}`), actor = actors[id];
+          lines.forEach((text,i) => group.append(svg("text", {x:actor.x,y:actor.y+97+i*16,class:previous[id][i] !== text ? "changed" : ""},text)));
+        }
+        $("policy-state").textContent = snap.policy.version ? `Saved policy v${snap.policy.version} · ${scopeName(snap.policy)} · expires ${snap.policy.hours}h after creation · ws_demo_01` : "Step 0 · no saved workspace policy yet";
+        return snap;
+      }
+      function route(from, to) {
+        const a = actors[from], b = actors[to];
+        const start = a.y + 120, end = b.y + 120;
+        const laneA = a.y + 153, laneB = b.y + 153;
+        if (a.y === b.y) return `M${a.x},${start} V${laneA} H${b.x} V${end}`;
+        // Vertical rails run between columns; no wire passes through an actor.
+        const rail = a.x === b.x ? (a.x === 830 ? 665 : a.x + 165) : (a.x < b.x ? a.x + 165 : a.x - 165);
+        return `M${a.x},${start} V${laneA} H${rail} V${laneB} H${b.x} V${end}`;
+      }
+      function stateAfterExchange() {
+        const state = {
+          browser: credential("Browser session / JWT"), auth: badge(mode === "oauth" ? "No app grant yet" : "No workspace key yet", "empty"),
+          sandbox: badge("No credential yet", "empty"), rest: badge("No request yet", "empty"),
+          relay: badge("Chat relay available"), convex: badge("No Kimi events yet", "empty"), ...currentFlow().initial
+        };
+        currentFlow().phases.slice(0, phaseIndex + 1).forEach((phase, p) => {
+          phase.exchanges.slice(0, p === phaseIndex ? exchangeIndex + 1 : undefined).forEach(step => Object.assign(state, step.state));
+        });
+        return state;
+      }
+      function renderCustody() {
+        for (const [id, item] of Object.entries(stateAfterExchange())) {
+          const actor = actors[id], color = colors[item.kind], group = $(`stored-${id}`);
+          group.replaceChildren(
+            svg("rect", { x: actor.x - 119, y: actor.y + 54, width: 238, height: 25, fill: color.fill, stroke: color.stroke }),
+            svg("text", { x: actor.x, y: actor.y + 71, fill: color.text }, item.label)
+          );
+          if ($(`${id}-state`)) $(`${id}-state`).textContent = item.label;
+        }
+      }
+      let motionElapsed = 0, lastFrameTime = null, motionKey = "";
+      function renderPacket(step) {
+        if (animation !== null) cancelAnimationFrame(animation);
+        animation = null;
+        const key = `${view}:${mode}:${scenario}:${phaseIndex}:${exchangeIndex}`;
+        if (key !== motionKey) { motionElapsed = 0; motionKey = key; }
+        lastFrameTime = null;
+        const packet = $("packet");
+        packet.replaceChildren();
+        const total = 24 + step.items.length * 18;
+        const primary = colors[step.items[0].kind];
+        const caption = step.items.some(item => item.kind === "credential")
+          ? step.items.some(item => item.kind === "message") ? "CREDENTIAL + REQUEST" : "USABLE CREDENTIAL"
+          : primary.caption;
+        packet.append(svg("rect", { x: -125, y: -total / 2, width: 250, height: total, rx: 9, fill: primary.fill, stroke: primary.stroke }));
+        packet.append(svg("text", { class: "card-caption", x: 0, y: -total / 2 + 14, fill: primary.stroke, style: "font-size: 9px" }, caption));
+        step.items.forEach((item, i) => {
+          packet.append(svg("text", { x: 0, y: -total / 2 + 31 + i * 18, fill: colors[item.kind].text, style: "font-size: 12px; font-weight: 600" }, item.label));
+        });
+        const path = $("route"), length = path.getTotalLength();
+        // The dot follows the actual route. Its label floats in a clear lane,
+        // with a tether so vertical exchanges never cover the boxes or metadata.
+        const labelY = Math.min(actors[step.from].y, actors[step.to].y) + 153;
+        $("packet-dot").setAttribute("fill", primary.stroke);
+        function position(progress) {
+          const point = path.getPointAtLength(length * progress);
+          const labelX = Math.max(150, Math.min(850, point.x));
+          packet.setAttribute("transform", `translate(${labelX} ${labelY})`);
+          $("packet-dot").setAttribute("cx", point.x);
+          $("packet-dot").setAttribute("cy", point.y);
+          const edge = labelY + (point.y >= labelY ? total / 2 : -total / 2);
+          $("packet-tether").setAttribute("d", Math.abs(point.y - labelY) > total / 2 + 8 && Math.abs(point.y - labelY) < 100 ? `M${labelX},${edge} L${point.x},${point.y}` : "");
+        }
+        function draw() {
+          const progress = Math.max(0, Math.min(1, ((motionElapsed % 6000) - 500) / 4800));
+          position(progress * progress * (3 - 2 * progress));
+        }
+        if (reducedMotion.matches) { position(.5); return; }
+        draw();
+        if (motionPaused) return;
+        function tick(now) {
+          if (lastFrameTime !== null) motionElapsed += now - lastFrameTime;
+          lastFrameTime = now;
+          draw();
+          animation = requestAnimationFrame(tick);
+        }
+        animation = requestAnimationFrame(tick);
+      }
+      function stopPlayback() {
+        if (timer !== null) clearTimeout(timer);
+        timer = null;
+        $("play").textContent = "▶ Play all";
+        $("play").setAttribute("aria-pressed", "false");
+      }
+      function renderSteps() {
+        $("steps").replaceChildren();
+        currentFlow().phases.forEach((phase, n) => {
+          const button = document.createElement("button");
+          button.type = "button"; button.className = "step-tab";
+          button.textContent = `${n}. ${phase.short}`;
+          button.addEventListener("click", () => { stopPlayback(); phaseIndex = n; exchangeIndex = 0; render(); });
+          $("steps").append(button);
+        });
+      }
+      function render() {
+        const flow = currentFlow(), phase = flow.phases[phaseIndex], step = phase.exchanges[exchangeIndex];
+        const complete = flow.phases.slice(0, phaseIndex).reduce((n, p) => n + p.exchanges.length, 0) + exchangeIndex;
+        const total = flow.phases.reduce((n, p) => n + p.exchanges.length, 0);
+        renderActors();
+        const snap = renderMetadata(complete);
+        const expired = flow.phases.slice(0, phaseIndex + 1).some(p => p.short === "TTL expiry");
+        $("ttl-status").textContent = expired ? "Workspace expired · access blocked" : `Workspace deadline: start +${snap.policy.hours || 4}h (example)`;
+        $("all-view").setAttribute("aria-pressed", String(view === "all"));
+        $("chat-view").setAttribute("aria-pressed", String(view === "chat"));
+        $("actions-view").setAttribute("aria-pressed", String(view === "actions"));
+        $("diagram-heading").textContent = view === "chat" ? "Chat relay and action gateway" : view === "all" ? "Full flow · chat, credentials and Runpod" : "Control plane · credentials and API access";
+        $("snapshot-title").textContent = "State after this exchange";
+        $("relay-row").hidden = view === "actions";
+        $("vault-state").parentElement.hidden = view === "chat";
+        $("inspect-action").hidden = view !== "chat" || phase.short !== "Runpod request";
+        $("credential-setup").hidden = view !== "chat" || mode === "jwt";
+        $("policy-summary").textContent = view === "chat" ? "Browser ⇄ chat relay ⇄ Kimi. The relay saves events in Convex. Runpod operations go through the separate action gateway; ordinary chat is not an operation approval." : mode !== "jwt"
+          ? (scenario === "read" ? "Auto example: reads only. " : "Auto example: createPod within selected resource/spend limits. ") + (mode === "key" ? "Setup JWT → mint a scoped API key with TTL → encrypt and store → decrypt for allowed REST v2 calls. The key works after the browser JWT expires; revoke it at stop." : "Browser consent → OAuth access + refresh tokens → encrypted refresh storage → refresh access without the browser. Workspace and connection deadlines still apply.")
+          : "Interactive: browser JWT → control plane → REST v2. No stored user API key or OAuth refresh token. Reads within scope proceed; every billable/create/update/delete operation needs approval.";
+        $("step-kicker").textContent = `${mode === "jwt" ? "Browser JWT" : mode === "oauth" ? "Auto OAuth" : "Auto API key"} · ${phase.short} · ${exchangeIndex + 1}/${phase.exchanges.length}`;
+        $("step-title").textContent = phase.title;
+        $("step-description").textContent = step.description;
+        $("payload-text").textContent = step.items.map(item => item.label).join(" + ");
+        $("boundary-note").textContent = phase.boundary;
+        $("route-label").textContent = `${actorName(step.from)} → ${actorName(step.to)}`;
+        $("svg-desc").textContent = `${actorName(step.from)} sends ${step.items.map(item => item.label).join(" and ")} to ${actorName(step.to)}. ${phase.boundary}`;
+        $("step-count").textContent = `Exchange ${complete + 1} / ${total}`;
+        $("track-fill").style.width = `${(complete + 1) / total * 100}%`;
+        $("previous").disabled = complete === 0;
+        $("next").disabled = complete === total - 1;
+        $("mode-note").textContent = flow.note;
+        $("footer-note").textContent = flow.footer;
+        $("jwt-mode").setAttribute("aria-pressed", String(mode === "jwt"));
+        $("scenario").value = scenario;
+        $("scenario").querySelector('option[value="manual"]').textContent = mode === "jwt" ? "Create pod · ask each time" : "Create pod · within Auto scope";
+        document.querySelector('[data-actor="db"] text:not(.index):not(.sub)').textContent = (mode === "jwt" || view === "chat") ? "Workspace records" : "Credential DB";
+        document.querySelector('.custody dt[data-db-label]').textContent = (mode === "jwt" || view === "chat") ? "Workspace DB" : "Credential DB";
+        document.querySelector('[data-actor="auth"]').style.opacity = mode === "jwt" ? ".45" : "1";
+        document.querySelector('[data-actor="db"] .sub').textContent = (mode === "jwt" || view === "chat") ? "Scope, lifetime and token hash" : "Ciphertext, policy, token hash";
+        document.querySelector('[data-actor="vault"]').style.opacity = mode === "jwt" ? ".45" : "1";
+        $("oauth-mode").setAttribute("aria-pressed", String(mode === "oauth"));
+        $("key-mode").setAttribute("aria-pressed", String(mode === "key"));
+        $("motion").disabled = reducedMotion.matches;
+        $("motion").textContent = reducedMotion.matches ? "Motion reduced" : motionPaused ? "Resume motion" : "Pause motion";
+        $("motion").setAttribute("aria-pressed", String(motionPaused || reducedMotion.matches));
+        document.querySelectorAll(".node").forEach(node => node.classList.toggle("active", [step.from, step.to].includes(node.dataset.actor)));
+        $("steps").querySelectorAll("button").forEach((button, n) => {
+          if (n === phaseIndex) {
+            button.setAttribute("aria-current", "step");
+            const tabs = $("steps"), left = button.offsetLeft;
+            if (left < tabs.scrollLeft || left + button.offsetWidth > tabs.scrollLeft + tabs.clientWidth) {
+              tabs.scrollTo({ left: Math.max(0, left - (tabs.clientWidth - button.offsetWidth) / 2), behavior: reducedMotion.matches ? "auto" : "smooth" });
+            }
+          } else button.removeAttribute("aria-current");
+        });
+        $("exchange-progress").replaceChildren(...phase.exchanges.map((_, n) => {
+          const part = document.createElement("span"); part.className = n === exchangeIndex ? "current" : n < exchangeIndex ? "complete" : ""; return part;
+        }));
+        renderCustody();
+        $("route").setAttribute("d", route(step.from, step.to));
+        renderPacket(step);
+      }
+      function advance(direction) {
+        const phases = currentFlow().phases;
+        if (direction === 1) {
+          if (exchangeIndex < phases[phaseIndex].exchanges.length - 1) exchangeIndex++;
+          else if (phaseIndex < phases.length - 1) { phaseIndex++; exchangeIndex = 0; }
+          else return false;
+        } else if (exchangeIndex > 0) exchangeIndex--;
+        else if (phaseIndex > 0) { phaseIndex--; exchangeIndex = phases[phaseIndex].exchanges.length - 1; }
+        else return false;
+        render(); return true;
+      }
+      function setMode(nextMode) {
+        stopPlayback(); mode = nextMode; if (mode !== "jwt" && view === "chat") view = "all"; flows = buildFlows(); phaseIndex = 0; exchangeIndex = 0; renderSteps(); render();
+      }
+      function setView(nextView) {
+        stopPlayback(); view = nextView; flows = buildFlows(); phaseIndex = 0; exchangeIndex = 0; renderSteps(); render();
+      }
+      $("credential-setup").addEventListener("click", () => setView("actions"));
+      $("all-view").addEventListener("click", () => setView("all"));
+      $("chat-view").addEventListener("click", () => setView("chat"));
+      $("actions-view").addEventListener("click", () => setView("actions"));
+      $("inspect-action").addEventListener("click", () => {
+        setView("actions"); phaseIndex = currentFlow().phases.findIndex(p=>p.short === "Request + approve"); render();
+      });
+      $("permissions").addEventListener("click", () => {
+        stopPlayback(); phaseIndex = currentFlow().phases.findIndex(p=>p.short === "Edit permissions"); exchangeIndex = 0; render();
+      });
+      $("jwt-mode").addEventListener("click", () => setMode("jwt"));
+      $("oauth-mode").addEventListener("click", () => setMode("oauth"));
+      $("key-mode").addEventListener("click", () => setMode("key"));
+      $("scenario").addEventListener("change", event => {
+        stopPlayback(); scenario = event.target.value; flows = buildFlows(); phaseIndex = 0; exchangeIndex = 0; renderSteps(); render();
+      });
+      $("expiry").addEventListener("click", () => {
+        stopPlayback(); phaseIndex = currentFlow().phases.findIndex(p => p.short === "TTL expiry"); exchangeIndex = 0; render();
+      });
+      $("previous").addEventListener("click", () => { stopPlayback(); advance(-1); });
+      $("next").addEventListener("click", () => { stopPlayback(); advance(1); });
+      $("reset").addEventListener("click", () => { stopPlayback(); phaseIndex = 0; exchangeIndex = 0; motionElapsed = 0; render(); });
+      $("motion").addEventListener("click", () => { motionPaused = !motionPaused; if (motionPaused) stopPlayback(); render(); });
+      $("play").addEventListener("click", () => {
+        if (timer !== null) { stopPlayback(); motionPaused = true; render(); return; }
+        if ($("next").disabled) { phaseIndex = 0; exchangeIndex = 0; }
+        motionPaused = false; render();
+        $("play").textContent = "Ⅱ Pause all"; $("play").setAttribute("aria-pressed", "true");
+        function next() { if (advance(1)) timer = setTimeout(next, 6500); else stopPlayback(); }
+        timer = setTimeout(next, 6500);
+      });
+      document.addEventListener("keydown", event => {
+        if (event.target instanceof HTMLElement && ["BUTTON", "INPUT", "TEXTAREA", "SELECT", "SUMMARY"].includes(event.target.tagName)) return;
+        if (event.key === "ArrowRight") { event.preventDefault(); $("next").click(); }
+        if (event.key === "ArrowLeft") { event.preventDefault(); $("previous").click(); }
+      });
+      reducedMotion.addEventListener("change", () => { stopPlayback(); render(); });
+      renderSteps(); render();
+    </script>
+  </body>
+</html>
