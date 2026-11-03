@@ -126,14 +126,15 @@
         <div>
           <div class="eyebrow">RunPod sandbox · architecture example</div>
           <h1>Follow the permission</h1>
-          <p class="intro">Start a sandbox, follow the Kimi conversation, then inspect permissions and Runpod actions. Watch each component’s state change.</p>
+          <p class="intro">Start a sandbox, follow the Assistant conversation, then inspect permissions and Runpod actions. Watch each component’s state change.</p>
         </div>
       </div>
 
       <div class="mode-row" role="group" aria-label="Session mode">
-        <button class="mode" id="jwt-mode" type="button" aria-pressed="true">Interactive · browser JWT</button>
-        <button class="mode" id="key-mode" type="button" aria-pressed="false">Auto · API key</button>
-        <button class="mode" id="oauth-mode" type="button" aria-pressed="false">Auto · OAuth</button>
+        <button class="mode" id="convex-mode" type="button" aria-pressed="true">Current · Convex key</button>
+        <button class="mode" id="jwt-mode" type="button" aria-pressed="false">Earlier · browser JWT</button>
+        <button class="mode" id="key-mode" type="button" aria-pressed="false">Reference · KMS key</button>
+        <button class="mode" id="oauth-mode" type="button" aria-pressed="false">Future · OAuth</button>
         <span class="mode-note" id="mode-note">Current OAuth PRs + proposed sandbox gateway</span>
       </div>
 
@@ -141,7 +142,7 @@
         <button class="mode" id="all-view" type="button" aria-pressed="true">Full flow</button>
         <button class="mode" id="chat-view" type="button" aria-pressed="false">Chat + history</button>
         <button class="mode" id="actions-view" type="button" aria-pressed="false">Setup + API access</button>
-        <p class="view-note">Two responsibilities in our backend: the chat relay streams and records Kimi activity; the action gateway enforces permissions before Runpod calls. They can live in the same service.</p>
+        <p class="view-note">The Assistant backend owns the model loop and sandbox commands. Its control plane checks every account action. Convex stores credentials and durable activity.</p>
       </div>
       <section class="policy-panel" aria-label="Permission and expiry policy">
         <div class="scenario-row">
@@ -160,10 +161,11 @@
           <ul>
             <li><strong>Workspace, Auto permission, sandbox token and model session:</strong> expire by the user-set workspace deadline. Activity and token refresh never move it. Four hours is illustrative.</li>
             <li><strong>Approvals:</strong> short-lived, single-operation, exact parameters; unusable after their deadline, a policy change or workspace expiry.</li>
-            <li><strong>Auto-mode API key:</strong> absolute expiry no later than the workspace. Native API enforcement is required; until available, control-plane denial and revocation cleanup are the fallback.</li>
+            <li><strong>Current Convex key:</strong> no native API-key TTL. The binding expires and ciphertext is erased. Upstream revocation needs browser auth; pending cleanup is retained. The environment encryption secret is not a separate KMS boundary.</li>
+            <li><strong>Earlier KMS/expiring-key proposal:</strong> absolute expiry no later than the workspace. Native API enforcement is required; until available, control-plane denial and revocation cleanup are the fallback.</li>
             <li><strong>Auto-mode OAuth:</strong> access tokens last one hour in this model. Refresh access has a finite connection deadline; rotating tokens does not reset it. Workspace expiry blocks this workspace even if the account connection is still valid.</li>
-            <li><strong>Browser sessions, codes, assertions and service authentication:</strong> keep their issuer's expiry. Interactive requests reuse a valid browser JWT; the browser renews it before expiry. No stored user API key or OAuth refresh token is needed. Protected service keys rotate independently; retain old decryption versions only while valid ciphertext needs them.</li>
-            <li><strong>Data and compute:</strong> purge chat/Kimi history after 28 days. New agent-created compute gets an explicit auto-stop lifetime; deployments have their own deadline, and existing resources are untouched.</li>
+            <li><strong>Browser sessions, codes, assertions and service authentication:</strong> keep their issuer's expiry. Interactive requests reuse a valid browser JWT; the browser renews it before expiry. The earlier JWT-only design stores no user API key; the current Convex design does. Protected service keys rotate independently; retain old decryption versions only while valid ciphertext needs them.</li>
+            <li><strong>Data and compute:</strong> purge chat/activity history after 28 days. New agent-created compute gets an explicit auto-stop lifetime; deployments have their own deadline, and existing resources are untouched.</li>
           </ul>
         </details>
       </section>
@@ -253,7 +255,7 @@
       document.body.classList.toggle("embedded", initialParams.get("embed") === "1");
       const selectedParam = (name, allowed, fallback) => allowed.includes(initialParams.get(name)) ? initialParams.get(name) : fallback;
       let scenario = selectedParam("scenario", ["read", "manual"], "read");
-      let mode = selectedParam("mode", ["jwt", "key", "oauth"], "jwt");
+      let mode = selectedParam("mode", ["convex", "jwt", "key", "oauth"], "convex");
       let view = selectedParam("view", ["all", "chat", "actions"], "all");
       const scenarios = {
         read: { operation: "listPods", request: "GET /pods", result: "Pod list + request ID", auto: false },
@@ -487,10 +489,57 @@
           phases
         };
       }
-      const currentFlow = () => view === "chat" ? buildChatFlow() : view === "all" ? buildCombinedFlow() : flows[mode];
+      function buildConvexFlow() {
+        const writing = scenario === "manual";
+        const setup = phase("Setup + key", "Approve the workspace and its backend key", "The browser JWT verifies setup and the selected account. A stored key is a credential, not an approval for future writes.", [
+          exchange("browser","gateway",[credential("Browser JWT"),badge("Start + scoped-key consent")],"Alice approves a CPU workspace, its four-hour limit and a dedicated account key. Manual mode remains on.",{gateway:badge("Owner and account verified")}),
+          {...exchange("gateway","db",[badge("Reserve issuance + deadline")],"Reserve one key attempt for this account/workspace. A second start cannot mint another key.",{db:badge("Issuing · owner-bound")}),policy:{version:1,scope:writing?"create":"read",hours:4}},
+          exchange("gateway","auth",[credential("Browser JWT"),badge("Explicit API scopes")],"Mint sandbox/pod/template scopes. Do not grant API-key management, billing or secrets access.",{auth:badge("Scoped key issued")}),
+          exchange("auth","gateway",[credential("Runpod API key")],"Runpod returns the usable key once. The backend sends it only to its service-authenticated Convex action.",{gateway:credential("Key briefly in memory")}),
+          exchange("gateway","vault",[credential("API key + service auth")],"The Convex action encrypts with AES-256-GCM using a random IV and authenticated owner/workspace/deadline metadata. The encryption key stays in its environment.",{vault:badge("Environment key V1","protected")}),
+          exchange("vault","db",[sealed("Ciphertext + IV + key ID")],"Only ciphertext and binding metadata enter the credentials table. Database-only disclosure does not reveal the key; runtime or environment-secret compromise can.",{db:sealed("Ready · ciphertext only"),gateway:badge("Credential binding ready")}),
+          exchange("gateway","auth",[credential("Browser JWT"),badge("Create approved sandbox")],"GraphQL create/terminate currently require USER_WRITE. These explicit lifecycle calls use browser auth, keeping the stored key's scopes narrow.",{sandbox:badge("Starting · ws_demo_01")}),
+          exchange("gateway","sandbox",[credential("Executor identity only")],"Register the ready sandbox and its scoped executor identity. No Runpod key, browser JWT or model-provider key enters the sandbox.",{sandbox:credential("Executor identity · 4h")}),
+          {...exchange("gateway","browser",[badge("Running · backend active")],"Show the confirmed workspace, Manual permissions and deadline.",{browser:badge("Running · Manual · v1")}),meta:{browserPolicy:1}}
+        ]);
+        const chat = phase("Chat + commands", "The Assistant owns the agent loop", "Runpod Assistant is the default model. An existing OpenAI-compatible endpoint is optional; its credentials also stay backend-only.", [
+          {...exchange("browser","relay",[badge("Message + account context")],"With the workspace already set up, verify the user and admit a bounded agent turn. Runpod Assistant usage counts against the user's message allowance.",{relay:badge("Agent turn active"),db:sealed("Ready · ciphertext only"),gateway:badge("Credential binding ready"),sandbox:credential("Executor identity · 4h")}),policy:{version:1,scope:writing?"create":"read",hours:4},meta:{browserPolicy:1}},
+          exchange("relay","sandbox",[credential("Executor identity"),badge("Command + command ID")],"The backend requests a shell/file command. The sandbox is a code executor, not the keeper of account credentials."),
+          exchange("sandbox","relay",[badge("Bounded output + exit code")],"Return bounded command output. A long command does not require the original browser JWT for the following account read.",{sandbox:badge("Command completed")}),
+          {...exchange("relay","convex",[badge("Run + command record")],"Persist redacted run/command records. Completed chat history is retained for 28 days; durable restart/replay of partial model loops remains planned.",{convex:badge("Run events saved")}),meta:{relaySeq:1,savedSeq:1}},
+          {...exchange("relay","browser",[badge("Streamed reply")],"Stream the answer. Returning users can load completed history; stored API credentials alone do not make model orchestration durable."),meta:{browserSeq:1}}
+        ]);
+        const action = phase("Request + approve", writing?"A Manual write still asks":"A read uses the stored key", "The control plane checks current owner, scope, resource ownership and deadline. It atomically claims the action before dispatch.", [
+          exchange(view === "actions"?"gateway":"relay",view === "actions"?"db":"gateway",[badge(writing?"Create private template":"List templates"),badge("Action ID + workspace")],"Only typed operations are accepted. The model cannot supply an arbitrary URL or bypass workspace policy.",{gateway:badge(writing?"Waiting for exact approval":"Allowed read")}),
+          ...(writing?[
+            exchange("gateway","browser",[badge("Exact template + parameters")],"Show the exact non-billable template write. No compute is launched. A ready API key does not authorize this write."),
+            exchange("browser","gateway",[credential("Fresh browser JWT"),badge("Approve exact action")],"Verify the user and save the approval. Atomically recheck policy/version/deadline; consume that approval once.",{gateway:badge("Approved · action claimed")})
+          ]:[]),
+          exchange("gateway","vault",[badge("Service auth + binding ID")],"After the action claim, request the key for this exact owner/account/workspace. No per-action browser JWT is needed for reads."),
+          exchange("db","vault",[sealed("Ciphertext + binding")],"Reject missing, disabled, wrong-owner or expired bindings before decrypting."),
+          exchange("vault","gateway",[credential("Runpod key in memory")],"Decrypt with the Convex environment key. Return the usable key only to the trusted Assistant backend.",{gateway:credential("Scoped key in memory")}),
+          exchange("gateway","rest",[credential("Scoped Runpod key"),badge(writing?"POST /templates":"GET /templates")],"Call an allowlisted REST v2 route. REST v2 independently enforces the API credential's scopes.",{rest:badge(writing?"Template created":"Templates returned")}),
+          exchange("rest","gateway",[badge(writing?"Template ID + result":"Template list + result")],"Receive the platform result before saving success. A lost response is recorded as uncertain, not replayed blindly."),
+          {...exchange("gateway","convex",[badge("Action ID + safe result")],"Persist the redacted result. Duplicate delivery returns the saved outcome; an uncertain write is not blindly repeated.",{convex:badge("Action result saved"),gateway:badge("Action complete")}),meta:{savedSeq:2}},
+          {...exchange("gateway","browser",[badge("Confirmed action result")],"Render the saved result in chat and workspace history.",{browser:badge("Result received")}),meta:{browserSeq:2}}
+        ]);
+        const policy = phase("Edit permissions", "The user controls permissions", "Changing chat destination or losing the browser never enables Auto.", [
+          exchange("browser","gateway",[credential("Browser JWT"),badge("Save read-only policy")],"The user unchecks create/update/delete and saves. The agent cannot widen its own scope."),
+          {...exchange("gateway","db",[badge("Policy v2 · same deadline")],"Save the new revision and invalidate incompatible pending approvals.",{db:sealed("Ciphertext + policy v2"),gateway:badge("Enforcing read only")}),policy:{version:2,scope:"read",hours:4}},
+          {...exchange("gateway","browser",[badge("Permissions saved · v2")],"Confirm the saved policy. Neither reconnect nor credential reapproval extends the original deadline."),meta:{browserPolicy:2}}
+        ]);
+        const expiry = phase("TTL expiry", "Local access expires; revocation is separate", "The Runpod API key has no native TTL. Platform expiry/OAuth and unattended lifecycle cleanup remain follow-ups.", [
+          exchange("gateway","db",[badge("Disable binding; erase secret")],"Every read enforces the deadline immediately. A minute cron removes expired ciphertext; pending key ID/binding metadata remains for cleanup.",{db:badge("Pending revocation","empty"),gateway:badge("New actions blocked","empty")}),
+          exchange("browser","gateway",[credential("Fresh browser authorization")],"When the browser is available, retry upstream key revocation and lifecycle cleanup. Do not label a pending revoke as completed."),
+          exchange("gateway","auth",[credential("Browser JWT"),badge("Revoke exact key ID")],"Confirm upstream revocation. Sandbox TTL is the compute backstop when browser-authorized termination cannot run.",{auth:badge("Key revoked","empty"),sandbox:badge("Stopped / TTL ended","empty")}),
+          exchange("gateway","db",[badge("Revocation confirmed")],"Retired metadata follows retention. Chat/activity keeps its 28-day rule; unresolved operational key IDs are not silently purged.",{db:badge("Revoked · no ciphertext","empty")})
+        ]);
+        return {note:"Current dev · approved keys encrypted in Convex",footer:"Manual writes still ask. Auto activation and durable model-loop restart are separate work. Convex environment encryption is a prototype custody boundary, not a managed KMS.",initial:{vault:badge("Convex environment key V1","protected"),db:badge("No workspace key yet","empty"),gateway:badge("No active workspace","empty"),relay:badge("Assistant model adapter"),convex:badge("28-day run history")},phases:view === "chat"?[chat,policy,phase("TTL expiry",expiry.title,expiry.boundary,[expiry.exchanges[0],exchange("gateway","browser",[badge("Access ended; cleanup status")],"Show whether platform termination and key revocation are confirmed. Full credential cleanup is shown in Setup + API access.",{browser:badge("Workspace access ended","empty")})])]:view === "actions"?[setup,action,policy,expiry]:[setup,chat,action,policy,expiry]};
+      }
+      const currentFlow = () => mode === "convex" ? buildConvexFlow() : view === "chat" ? buildChatFlow() : view === "all" ? buildCombinedFlow() : flows[mode];
       let flows = buildFlows();
       const $ = id => document.getElementById(id);
-      const actorName = id => id === "db" && (mode === "jwt" || view === "chat") ? "Workspace records" : actors[id].title;
+      const actorName = id => mode === "convex" && id === "vault" ? "Convex crypto" : mode === "convex" && id === "relay" ? "Assistant agent" : mode === "convex" && id === "db" ? "Convex credentials" : id === "db" && (mode === "jwt" || view === "chat") ? "Workspace records" : actors[id].title;
       const svgNS = "http://www.w3.org/2000/svg";
       let phaseIndex = 0, exchangeIndex = 0;
       let timer = null, animation = null, motionPaused = false;
@@ -512,8 +561,8 @@
           if ((view === "chat" && ["vault","auth"].includes(id)) || (view === "actions" && id === "relay")) node.style.display = "none";
           node.append(svg("rect", { x: actor.x - 130, y: actor.y - 47, width: 260, height: 98 }));
           node.append(svg("text", { class: "index", x: actor.x - 111, y: actor.y - 24 }, view === "all" && id === "relay" ? "CONTROL PLANE / CHAT" : actor.index));
-          node.append(svg("text", { x: actor.x - 111, y: actor.y + 4 }, actor.title));
-          node.append(svg("text", { class: "sub", x: actor.x - 111, y: actor.y + 27 }, actor.sub));
+          node.append(svg("text", { x: actor.x - 111, y: actor.y + 4 }, mode === "convex" && id === "sandbox" ? "Sandbox executor" : actorName(id)));
+          node.append(svg("text", { class: "sub", x: actor.x - 111, y: actor.y + 27 }, mode === "convex" ? ({vault:"Service action + environment secret",relay:"Model loop and tool execution",sandbox:"Shell and files; no account key",db:"Ciphertext + workspace binding"}[id] || actor.sub) : actor.sub));
           node.append(svg("g", { class: "stored", id: `stored-${id}` }));
           node.append(svg("g", { class: "actor-meta", id: `meta-${id}` }));
           $("actors").append(node);
@@ -538,9 +587,9 @@
           gateway: [rule, "Writes: workspace-owned resources"],
           db: [rule, "Policy changes: browser user only"],
           convex: [`Saved through event ${snap.meta.savedSeq}`, "Redacted history · purge after 28d"],
-          auth: [scenario === "read" ? "Platform ceiling: read" : "Platform ceiling: read + create", "Narrower workspace policy still applies"],
-          rest: [mode === "jwt" ? "Credential: user JWT" : mode === "key" ? "Credential: Auto API key" : "Credential: OAuth access", "Issuer checks + gateway policy"],
-          vault: ["Protected key version: k1", "Service rotation; no workspace TTL"]
+          auth: [mode === "convex" ? "Scoped key; no user:write" : scenario === "read" ? "Platform ceiling: read" : "Platform ceiling: read + create", "Narrower workspace policy still applies"],
+          rest: [mode === "convex" ? "Credential: scoped backend key" : mode === "jwt" ? "Credential: user JWT" : mode === "key" ? "Credential: Auto API key" : "Credential: OAuth access", "Issuer checks + gateway policy"],
+          vault: [mode === "convex" ? "Convex environment: key V1" : "Protected key version: k1", "Retain key until ciphertext migrated"]
         };
       }
       function renderMetadata(complete) {
@@ -565,7 +614,7 @@
         const state = {
           browser: credential("Browser session / JWT"), auth: badge(mode === "oauth" ? "No app grant yet" : "No workspace key yet", "empty"),
           sandbox: badge("No credential yet", "empty"), rest: badge("No request yet", "empty"),
-          relay: badge("Chat relay available"), convex: badge("No Kimi events yet", "empty"), ...currentFlow().initial
+          relay: badge("Chat relay available"), convex: badge(mode === "convex" ? "No run events yet" : "No Kimi events yet", "empty"), ...currentFlow().initial
         };
         currentFlow().phases.slice(0, phaseIndex + 1).forEach((phase, p) => {
           phase.exchanges.slice(0, p === phaseIndex ? exchangeIndex + 1 : undefined).forEach(step => Object.assign(state, step.state));
@@ -661,12 +710,14 @@
         $("snapshot-title").textContent = "State after this exchange";
         $("relay-row").hidden = view === "actions";
         $("vault-state").parentElement.hidden = view === "chat";
+        $("vault-state").previousElementSibling.textContent = mode === "convex" ? "Convex crypto" : "Key service";
+        $("relay-state").previousElementSibling.textContent = mode === "convex" ? "Assistant agent" : "Chat relay";
         $("inspect-action").hidden = view !== "chat" || phase.short !== "Runpod request";
         $("credential-setup").hidden = view !== "chat" || mode === "jwt";
-        $("policy-summary").textContent = view === "chat" ? "Browser ⇄ chat relay ⇄ Kimi. The relay saves events in Convex. Runpod operations go through the separate action gateway; ordinary chat is not an operation approval." : mode !== "jwt"
+        $("policy-summary").textContent = mode === "convex" ? "Approve one scoped backend key at startup. Convex stores ciphertext and decrypts in a service-only action. Manual writes still ask; account reads continue without renewing the browser JWT. Auto remains separate." : view === "chat" ? "Browser ⇄ chat relay ⇄ Kimi. The relay saves events in Convex. Runpod operations go through the separate action gateway; ordinary chat is not an operation approval." : mode !== "jwt"
           ? (scenario === "read" ? "Auto example: reads only. " : "Auto example: createPod within selected resource/spend limits. ") + (mode === "key" ? "Setup JWT → mint a scoped API key with TTL → encrypt and store → decrypt for allowed REST v2 calls. The key works after the browser JWT expires; revoke it at stop." : "Browser consent → OAuth access + refresh tokens → encrypted refresh storage → refresh access without the browser. Workspace and connection deadlines still apply.")
           : "Interactive: browser JWT → control plane → REST v2. No stored user API key or OAuth refresh token. Reads within scope proceed; every billable/create/update/delete operation needs approval.";
-        $("step-kicker").textContent = `${mode === "jwt" ? "Browser JWT" : mode === "oauth" ? "Auto OAuth" : "Auto API key"} · ${phase.short} · ${exchangeIndex + 1}/${phase.exchanges.length}`;
+        $("step-kicker").textContent = `${mode === "convex" ? "Convex key" : mode === "jwt" ? "Browser JWT" : mode === "oauth" ? "Auto OAuth" : "Auto API key"} · ${phase.short} · ${exchangeIndex + 1}/${phase.exchanges.length}`;
         $("step-title").textContent = phase.title;
         $("step-description").textContent = step.description;
         $("payload-text").textContent = step.items.map(item => item.label).join(" + ");
@@ -679,13 +730,15 @@
         $("next").disabled = complete === total - 1;
         $("mode-note").textContent = flow.note;
         $("footer-note").textContent = flow.footer;
+        $("convex-mode").setAttribute("aria-pressed", String(mode === "convex"));
         $("jwt-mode").setAttribute("aria-pressed", String(mode === "jwt"));
         $("scenario").value = scenario;
-        $("scenario").querySelector('option[value="manual"]').textContent = mode === "jwt" ? "Create pod · ask each time" : "Create pod · within Auto scope";
-        document.querySelector('[data-actor="db"] text:not(.index):not(.sub)').textContent = (mode === "jwt" || view === "chat") ? "Workspace records" : "Credential DB";
-        document.querySelector('.custody dt[data-db-label]').textContent = (mode === "jwt" || view === "chat") ? "Workspace DB" : "Credential DB";
+        $("scenario").querySelector('option[value="read"]').textContent = mode === "convex" ? "List templates · read only" : "List pods · read only";
+        $("scenario").querySelector('option[value="manual"]').textContent = mode === "convex" ? "Create template · ask each time" : mode === "jwt" ? "Create pod · ask each time" : "Create pod · within Auto scope";
+        document.querySelector('[data-actor="db"] text:not(.index):not(.sub)').textContent = mode === "convex" ? "Convex credentials" : (mode === "jwt" || view === "chat") ? "Workspace records" : "Credential DB";
+        document.querySelector('.custody dt[data-db-label]').textContent = mode === "convex" ? "Convex keys" : (mode === "jwt" || view === "chat") ? "Workspace DB" : "Credential DB";
         document.querySelector('[data-actor="auth"]').style.opacity = mode === "jwt" ? ".45" : "1";
-        document.querySelector('[data-actor="db"] .sub').textContent = (mode === "jwt" || view === "chat") ? "Scope, lifetime and token hash" : "Ciphertext, policy, token hash";
+        document.querySelector('[data-actor="db"] .sub').textContent = mode === "convex" ? "Ciphertext + workspace binding" : (mode === "jwt" || view === "chat") ? "Scope, lifetime and token hash" : "Ciphertext, policy, token hash";
         document.querySelector('[data-actor="vault"]').style.opacity = mode === "jwt" ? ".45" : "1";
         $("oauth-mode").setAttribute("aria-pressed", String(mode === "oauth"));
         $("key-mode").setAttribute("aria-pressed", String(mode === "key"));
@@ -736,6 +789,7 @@
       $("permissions").addEventListener("click", () => {
         stopPlayback(); phaseIndex = currentFlow().phases.findIndex(p=>p.short === "Edit permissions"); exchangeIndex = 0; render();
       });
+      $("convex-mode").addEventListener("click", () => setMode("convex"));
       $("jwt-mode").addEventListener("click", () => setMode("jwt"));
       $("oauth-mode").addEventListener("click", () => setMode("oauth"));
       $("key-mode").addEventListener("click", () => setMode("key"));
